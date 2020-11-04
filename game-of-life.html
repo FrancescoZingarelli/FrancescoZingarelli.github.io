@@ -1,0 +1,128 @@
+<!doctype html>
+<style>
+  input {
+    margin-left: -0.5px;
+    margin-right: -0.5px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+  }
+
+  .row {
+    height: 10px;
+  }
+
+  #grid { margin-bottom: 10px; }  
+  
+  .toggled {
+    border: solid;
+    border-width: 4px;
+    border-radius: 4px;
+    border-color: ForestGreen;
+  }
+</style>
+
+<body>
+    
+  <div id="grid"></div>
+  <button id="randomize">Randomize</button>
+  <button id="clear">Clear</button>
+  <button id="next">Next generation</button>
+  <button id="autorun">Auto Run</button>
+
+  <script>
+    const SIZE = 30
+
+    let grid = document.getElementById("grid")
+    let randomizeButton = document.getElementById("randomize")
+    let clearButton = document.getElementById("clear")
+    let nextButton = document.getElementById("next")
+    let autoRunButton = document.getElementById("autorun")
+
+    let checkboxes = []
+    for (let x = 0; x < SIZE; x++) {
+      let row = document.createElement("div")
+      row.className = "row"
+      grid.appendChild(row)
+      for (let y = 0; y < SIZE; y++) {
+        let checkbox = document.createElement("input")
+        checkbox.type = "checkbox"              // initially they're all unckecked
+        checkboxes.push(checkbox)
+        row.appendChild(checkbox)
+      }
+    }
+    
+
+
+    function liveNeighbours(state, cellX, cellY) {
+      let alive = 0
+      for (let x = Math.max(cellX - 1, 0); x <= Math.min(cellX + 1, SIZE); x++) {
+        for (let y = Math.max(cellY - 1, 0); y <= Math.min(cellY + 1, SIZE); y++) {
+          if (!(x === cellX && y === cellY) && state[x * SIZE + y]) alive++
+        }
+      }
+      return alive
+    }
+    
+    function lives(state, cellX, cellY) {
+      let alive = state[cellX * SIZE + cellY]
+      let neighbours = liveNeighbours(state, cellX, cellY)
+      return (alive && [2, 3].includes(neighbours)) || (!alive && neighbours === 3)
+    }
+    
+    const createState = cb => {
+      return state => {
+        let nextState = []
+        for (let x = 0; x < SIZE; x++) {
+          for (let y = 0; y < SIZE; y++) {
+            nextState.push(cb(state, x, y))
+          }
+        }
+        return nextState
+      }
+    }
+  
+    function applyState(state) {
+      state.forEach((alive, i) => checkboxes[i].checked = alive)
+    }
+
+    function stateFromCheckboxes() {
+      return checkboxes.map(checkb => checkb.checked)
+    }
+
+    const computeNextState = createState(lives)
+
+    const nextGeneration = () => applyState(computeNextState(stateFromCheckboxes()))
+    
+    const randomState = createState(() => Math.random() > 0.7)
+
+    const blankState = createState(() => false)()
+    
+
+
+    randomizeButton.addEventListener("click", e => {
+      applyState(randomState())
+    })
+  
+    clearButton.addEventListener("click", e => {
+      applyState(blankState)
+    })
+
+    nextButton.addEventListener("click", e => {
+      nextGeneration()
+    })
+    
+    let autoRun = null
+    autoRunButton.addEventListener("click", e => {
+      if (!autoRun) {
+        autoRun = setInterval(() => nextGeneration(), 80)
+        autoRunButton.className = "toggled"
+      } else {
+        clearInterval(autoRun)
+        autoRun = null
+        autoRunButton.className = ""
+      }
+    })
+      
+  </script>
+
+</body>
