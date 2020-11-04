@@ -76,8 +76,28 @@ class PictureCanvas {
 
   syncState(picture) {
     if (this.picture == picture) return;
+    if (!this.picture ||
+    this.picture.width !== picture.width ||
+    this.picture.height !== picture.height) {
+      this.picture = picture;
+      drawPicture(this.picture, this.dom, scale)
+      return
+    }
+    let diffPixels = this.pictureDiff(this.picture, picture)
     this.picture = picture;
-    drawPicture(this.picture, this.dom, scale);
+    drawPixels(diffPixels, this.dom, scale);
+  }
+
+  pictureDiff(picture1, picture2) {
+    let pixels = []
+    for (let x = 0; x < picture1.width; x++) {
+      for (let y = 0; y < picture1.height; y++) {
+        if (picture1.pixel(x, y) !== picture2.pixel(x, y)) {
+          pixels.push({x, y, color: picture2.pixel(x, y)})
+        }
+      } 
+    }
+    return pixels
   }
 
   mouse(downEvent, onDown) {
@@ -132,6 +152,15 @@ function drawPicture(picture, canvas, scale) {
   }
 }
 
+function drawPixels(pixels, canvas, scale) {
+  let cx = canvas.getContext("2d");
+
+  for (let {x, y, color} of pixels) {
+    cx.fillStyle = color
+    cx.fillRect(x * scale, y * scale, scale, scale);
+  }
+}
+
 function pointerPosition(pos, domNode) {
   let rect = domNode.getBoundingClientRect();
   return {x: Math.floor((pos.clientX - rect.left) / scale),
@@ -152,7 +181,11 @@ class PixelEditor {
     });
     this.controls = controls.map(
       Control => new Control(state, config));
-    this.dom = elt("div", {}, this.canvas.dom, elt("br"),
+    this.dom = elt("div", {
+                      tabIndex: "0",
+                      onkeydown: e => this.keyDown(e, config)
+                    },
+                    this.canvas.dom, elt("br"),
                    ...this.controls.reduce(
                      (a, c) => a.concat(" ", c.dom), []));
   }
@@ -160,6 +193,20 @@ class PixelEditor {
     this.state = state;
     this.canvas.syncState(state.picture);
     for (let ctrl of this.controls) ctrl.syncState(state);
+  }
+  keyDown(e, config) {
+    if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      config.dispatch({undo: true})
+      return 
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      for (let toolName in config.tools) {
+        if (toolName.slice(0, 1) === e.key) {
+          e.preventDefault()
+          config.dispatch({tool: toolName})
+        }
+      }
+    }
   }
 }
 
@@ -286,17 +333,122 @@ class UndoButton {
 
 
 
-
 // --------------------------------- TOOLS ---------------------------------
 
 function draw(pos, state, dispatch) {
-  function drawPixel({x, y}, state) {
-    let drawn = {x, y, color: state.color};
-    dispatch({picture: state.picture.draw([drawn])});
+  function connect(newPos, state) {
+    drawn = createLine(pos, newPos, state.color)
+    pos = newPos
+    dispatch({picture: state.picture.draw(drawn)});
   }
-  drawPixel(pos, state);
-  return drawPixel;
+  connect(pos, state);
+  return connect;
 }
+
+
+
+function createLine(from, to, color) {
+  let drawn = []
+
+  let compare = (a, b) => {
+    if (a < b) return -1
+    if (a === b) return 0
+    return 1
+  }
+
+  let dir = {
+    x: compare(to.x, from.x),
+    y: compare(to.y, from.y)
+  }
+
+  let dis = {
+    x: Math.abs(to.x - from.x),
+    y: Math.abs(to.y - from.y)
+  }
+
+  let big, small
+  big = dis.x > dis.y ? 'x' : 'y'
+  small = dis.x > dis.y ? 'y' : 'x'
+
+  let curr = {...from}
+  drawn.push({...curr, color})
+
+  // VERSIONE MIA, FUNZINOAVA, MA L'EFFETTO ERA UN PO' PIU' "BRUTTO"...
+  /* let smallMovements = []
+  let frequency = (dis[big] + 1) / (dis[small] + 1)
+  for (let i = 0; i < dis[small]; i++) {
+    smallMovements.push(Math.round(frequency + frequency * i) - 1)
+  }
+
+  for (let i = 0; i < dis[big]; i++) {
+    curr[big] += dir[big]
+    if (smallMovements.includes(i)) curr[small] += dir[small]
+
+    drawn.push({...curr, color})
+  } */
+
+  // VERSIONE ISPIRATA A QUELLA DEL LIBRO
+  let slope = dis[small] / dis[big]
+  for (let i = 0; i < dis[big]; i++) {
+    curr[big] += dir[big]
+    curr[small] += slope * dir[small]
+
+    drawn.push({[big]: curr[big], [small]: Math.round(curr[small]), color})
+  }
+
+  return drawn
+}
+
+// CREATELINE - VERSIONE DEL LIBRO
+function createLineLIBRO(from, to, color) {
+  let points = [];
+  if (Math.abs(from.x - to.x) > Math.abs(from.y - to.y)) {
+    if (from.x > to.x) [from, to] = [to, from];
+    let slope = (to.y - from.y) / (to.x - from.x);
+    for (let {x, y} = from; x <= to.x; x++) {
+      points.push({x, y: Math.round(y), color});
+      y += slope;
+    }
+  } else {
+    if (from.y > to.y) [from, to] = [to, from];
+    let slope = (to.x - from.x) / (to.y - from.y);
+    for (let {x, y} = from; y <= to.y; y++) {
+      points.push({x: Math.round(x), y, color});
+      x += slope;
+    }
+  }
+  return points;
+}
+
+// CREATELINE - VERSIONE DEL LIBRO MODIFICATA DA ME   (ho tolto la ripetizione...)
+function createLine(from, to, color) {
+  let points = [];
+
+  let dis = {
+    x: Math.abs(to.x - from.x),
+    y: Math.abs(to.y - from.y)
+  }
+  let big = dis.x > dis.y ? "x" : "y"
+  let small = dis.x > dis.y ? "y" : "x"
+
+  if (from[big] > to[big]) [from, to] = [to, from];
+  let slope = (to[small] - from[small]) / (to[big] - from[big]);
+  for (let pos = {...from}; pos[big] <= to[big]; pos[big]++) {
+    points.push({[big]: pos[big], [small]: Math.round(pos[small]), color});
+    pos[small] += slope;
+  }
+
+  return points;
+}
+
+function line(start, state, dispatch) {
+  return pos =>  {
+    let drawn = createLine(start, pos, state.color)
+    dispatch({picture: state.picture.draw(drawn)});
+  }
+}
+
+
 
 function rectangle(start, state, dispatch) {
   function drawRectangle(pos) {
@@ -314,6 +466,25 @@ function rectangle(start, state, dispatch) {
   }
   drawRectangle(start);
   return drawRectangle;
+}
+
+function circle(center, state, dispatch) {
+  function drawCircle(pos) {
+    let radius = Math.sqrt((pos.x - center.x)**2 + (pos.y - center.y)**2)
+    let radiusRound = Math.ceil(radius)
+    let drawn = [];
+    for (let x = center.x - radiusRound - 1; x < center.x + radiusRound + 1; x++) {
+      for (let y = center.y - radiusRound - 1; y < center.y + radiusRound + 1; y++) {
+        if (Math.sqrt((x - center.x)**2 + (y - center.y)**2) <= radius
+        && x >= 0 && x < state.picture.width && y >= 0 && y < state.picture.height) {
+          drawn.push({x, y, color: state.color})
+        }
+      }
+    }
+    dispatch({picture: state.picture.draw(drawn)});
+  }
+  drawCircle(center);
+  return drawCircle;
 }
 
 const around = [{dx: -1, dy: 0}, {dx: 1, dy: 0},
@@ -352,7 +523,7 @@ const startState = {
   doneAt: 0
 };
 
-const baseTools = {draw, fill, rectangle, pick};
+const baseTools = {draw, line, fill, rectangle, circle, pick};
 
 const baseControls = [
   ToolSelect, ColorSelect, SaveButton, LoadButton, UndoButton
