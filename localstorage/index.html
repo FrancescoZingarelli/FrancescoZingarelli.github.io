@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <p>this should be "bar": [<span id="foo"></span>]</p>
+  <hr>
+  <p>set this to what you want:</p>
+  <input type="text"><button>set</button>
+  <p id="whatyouwant"></p>
+
+  <script>
+    localStorage.setItem("foo", "bar")
+    
+    let fooValue = localStorage.getItem("foo")
+    document.getElementById("foo").appendChild(document.createTextNode(fooValue))
+ 
+    let button = document.querySelector("button")
+    let input = document.querySelector("input")
+    let output = document.querySelector("#whatyouwant")
+
+    output.innerText = localStorage.getItem("whatyouwant")
+
+    button.addEventListener("click", e => {
+      localStorage.setItem("whatyouwant", input.value)
+      input.value = ""
+      output.innerText = localStorage.getItem("whatyouwant")
+    })
+ </script>
+</body>
+</html>
