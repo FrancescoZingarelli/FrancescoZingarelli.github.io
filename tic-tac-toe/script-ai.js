@@ -55,7 +55,7 @@ function draw(cells) {
       if (cells[x + y * 3]) {
         let text = document.createElement("span")
         text.className = "symbol"
-        text.textContent = cells[x + y * 3] === 'human' ? '🧍' : '🤖'
+        text.textContent = cells[x + y * 3] === 'human' ? '👦' : '🤖'
         cellElement.textContent = ''
         cellElement.appendChild(text)
         cellElement.className = 'cell'
