@@ -1,0 +1,31 @@
+#game {
+  position: relative;
+}
+
+.line {
+  position: absolute;
+  background: black;
+}
+
+.cell {
+  position: absolute;
+}
+.empty {
+  cursor: pointer;
+}
+
+.symbol {
+  position: relative;
+  font-size: 40px;
+  top: 20px;
+  left: 20px;
+}
+
+.message {
+  position: relative;
+  top: 300px;
+}
+
+button {
+  margin-left: 2em;
+}
