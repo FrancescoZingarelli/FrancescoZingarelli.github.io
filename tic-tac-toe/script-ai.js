@@ -1,12 +1,35 @@
-let game = document.querySelector('#game')
+// UTILS
+
+function elt(type, props, ...children) {
+  let dom = document.createElement(type);
+  if (props) Object.assign(dom, props);
+  for (let child of children) {
+    if (typeof child != "string") dom.appendChild(child);
+    else dom.appendChild(document.createTextNode(child));
+  }
+  return dom;
+}
+
+
+
+let container = document.querySelector('#container')
+
+let game = elt("div", {id:"game"})
+container.appendChild(game)
 
 const CELL_SIZE = 80
+const LINE_WIDTH = 5
+
+const GAME_SIZE = CELL_SIZE * 3 + LINE_WIDTH * 2
+
+game.style.width = GAME_SIZE + 'px'
+game.style.height = GAME_SIZE + 'px'
 
 let linesData = [
-  {left: CELL_SIZE + 'px', top: '0px', width: '4px', height: (CELL_SIZE * 3 + 8) + 'px' },
-  {left: (CELL_SIZE * 2 + 4) + 'px', top: '0px', width: '4px', height: (CELL_SIZE * 3 + 8) + 'px' },
-  {left: '0px', top: CELL_SIZE + 'px', width: (CELL_SIZE * 3 + 8) + 'px', height: '4px' },
-  {left: '0px', top: (CELL_SIZE * 2 + 4) + 'px', width: (CELL_SIZE * 3 + 8) + 'px', height: '4px' }
+  {left: CELL_SIZE + 'px', top: '0px', width: LINE_WIDTH + 'px', height: (CELL_SIZE * 3 + 8) + 'px' },
+  {left: (CELL_SIZE * 2 + 4) + 'px', top: '0px', width: LINE_WIDTH + 'px', height: (CELL_SIZE * 3 + 8) + 'px' },
+  {left: '0px', top: CELL_SIZE + 'px', width: (CELL_SIZE * 3 + 8) + 'px', height: LINE_WIDTH + 'px' },
+  {left: '0px', top: (CELL_SIZE * 2 + 4) + 'px', width: (CELL_SIZE * 3 + 8) + 'px', height: LINE_WIDTH + 'px' }
 ]
 
 for (let lineData of linesData) {
@@ -25,43 +48,69 @@ function initializeCells() {
 
   for (let y = 0; y < 3; y++) {
     for (let x = 0; x < 3; x++) {
-      let cell = document.createElement("div")
-      cell.className = "cell empty"
-      cell.id = y * 3 + x
+      let cell = elt("div",
+        { className: "cell empty", id: y * 3 + x }
+      )
       cell.style.width = CELL_SIZE + 'px'
       cell.style.height = CELL_SIZE + 'px'
       cell.style.left = x * (CELL_SIZE + 4) + 'px'
       cell.style.top = y * (CELL_SIZE + 4) + 'px'
+
       cellElements.push(cell)
       game.appendChild(cell)
     }
   }
 }
 
+const SYMBOL_SIZE = 40
 
-
-/* function draw(cells) {
-  for (let x = 0; x < 3; x++) {
-    for (let y = 0; y < 3; y++) {
-      let cellElement = cellElements[x + y * 3]
-      if (cells[x + y * 3]) cellElement.textContent = cells[x + y * 3] === 'human' ? ' ❌' : '⭕️'
-    }
-  }
-} */
 function draw(cells) {
   for (let y = 0; y < 3; y++) {
     for (let x = 0; x < 3; x++) {
       let cellElement = cellElements[x + y * 3]
       if (cells[x + y * 3]) {
-        let text = document.createElement("span")
-        text.className = "symbol"
-        text.textContent = cells[x + y * 3] === 'human' ? '🙂' : '🤖'
+        let symbol = elt("span", { className: "symbol" },
+          cells[x + y * 3] === 'human' ? '🙂' : '🤖'
+        )
+        symbol.style.fontSize = SYMBOL_SIZE + 'px'
+        symbol.style.top = (CELL_SIZE - SYMBOL_SIZE) / 2 + 'px'
+        symbol.style.left = (CELL_SIZE - SYMBOL_SIZE) / 2 + 'px'
+
         cellElement.textContent = ''
-        cellElement.appendChild(text)
+        cellElement.appendChild(symbol)
         cellElement.className = 'cell'
       }
     }
   }
+}
+
+
+
+function turn(cells, player) {
+  return new Promise(resolve => {
+    if (player === 'human') {
+      let freeCellElements =
+        cells.reduce((arr, cell, idx) => {
+          return cell ? arr : [...arr, cellElements.find(el => el.id === String(idx))]
+        }, [])
+
+      function selected(event) {
+        freeCellElements.forEach(el => el.removeEventListener('click', selected))
+        let newCells = [ ...cells ]
+        newCells[Number(event.target.id)] = 'human'
+        resolve(newCells)
+      }
+
+      freeCellElements.forEach(cellElement => {
+        cellElement.addEventListener('click', selected)
+      })
+    } else {
+      let aiMove = aiBestMove(cells)
+      let newCells = cells.slice()
+      newCells[aiMove] = 'ai'
+      resolve(newCells)
+    }
+  })
 }
 
 let winCombinations = [
@@ -70,63 +119,31 @@ let winCombinations = [
   [0, 4, 8], [2, 4, 6]
 ]
 
-function turn(state, player) {
-  return new Promise((resolve, reject) => {
-    if (player === 'human') {
-      let freeCellElements =
-        state.cells.reduce((arr, cell, idx) => {
-          return cell ? arr : [...arr, cellElements.find(el => el.id === String(idx))]
-        }, [])
+function calculateGameState(cells) {
+  let newState = { cells }
 
-      function selected(event) {
-        freeCellElements.forEach(el => el.removeEventListener('click', selected))
-        let newState = { ...state }
-        newState.cells[Number(event.target.id)] = 'human'
-        draw(newState.cells)
-        let checkCombinations = winCombinations.map(comb => comb.map(idx => newState.cells[idx]))
-        if (checkCombinations.some(comb => comb.every(p => p === 'human'))) {
-          newState.ended = true
-          newState.winner = 'human'
-        } else if (freeCellElements.length === 1) {
-          newState.ended = true
-          newState.winner = 'draw'
-        }
-        resolve(newState)
-      }
+  let combinations = winCombinations.map(comb => comb.map(idx => cells[idx]))
 
-      freeCellElements.forEach(cellElement => {
-        cellElement.addEventListener('click', selected)
-      })
-    } else {
-      let aiMove = aiBestMove(state.cells)
-      let newCellState = state.cells.slice()
-      newCellState[aiMove] = 'ai'
-      let newState = { ...state, cells: newCellState }
-      draw(newState.cells)
-      let checkCombinations = winCombinations.map(comb => comb.map(idx => newState.cells[idx]))
-      if (checkCombinations.some(comb => comb.every(p => p === 'ai'))) {
-        newState.ended = true
-        newState.winner = 'ai'
-      } else if (!newCellState.some(player => !player)) {
-        newState.ended = true
-        newState.winner = 'draw'
-      }
-      resolve(newState)
-    }
-  })
+  if (combinations.some(comb => comb.every(p => p === 'ai'))) {
+    newState.ended = true
+    newState.winner = 'ai'
+  } else if (combinations.some(comb => comb.every(p => p === 'human'))) {
+    newState.ended = true
+    newState.winner = 'human'
+  } else if (cells.every(player => player)) {
+    newState.ended = true
+    newState.winner = 'draw'
+  } else {
+    newState.ended = false
+    newState.winner = null
+  }
+  
+  return newState
 }
-
-
-
-let RECURSIONCOUNTER = 0
 
 function aiBestMove(cells) {
 
   function move(cells, player, layer) {
-    if (RECURSIONCOUNTER++ > 200000) {
-      console.log('over 200000 rounds')
-      return
-    }
 
     let freeCells = []
     cells.forEach((c, idx) => { if (!c) freeCells.push(idx) })
@@ -143,29 +160,20 @@ function aiBestMove(cells) {
       else outcomes.push({ cell, outcome: move(cellsCopy, player === 'ai' ? 'human' : 'ai', layer + 1)})
     }
 
-    let score = outcome => {
-      switch(outcome.outcome) {
-        case 'win':
-          return 1
-        case 'draw':
-          return 0
-        case 'lose':
-          return -1
-      }
-    }
+    let scores = { win: 1, draw: 0 , lose: -1 }
 
     let outcome
 
     if (player === 'ai') {
       outcome = outcomes.reduce((best, curr) => {
-          return score(curr) > score(best) ? curr : best
+          return scores[curr.outcome] > scores[best.outcome] ? curr : best
         })
     } else {
       outcome = outcomes.reduce((best, curr) => {
-        return score(curr) < score(best) ? curr : best
+        return scores[curr.outcome] < scores[best.outcome] ? curr : best
       })
     }
-    //console.log(player, outcomes, outcome, freeCells)
+
     return layer === 1 ? outcome.cell : outcome.outcome
   }
 
@@ -179,16 +187,17 @@ function endGame(state) {
   if (state.winner === 'draw') endGameString = 'DRAW'
   else endGameString += ((state.winner === 'ai' ? 'THE AI' : 'YOU') + ' WON!')
 
-  let message = document.createElement("div")
-  message.className = "message"
-  message.appendChild(document.createTextNode(endGameString))
-  let button = document.createElement("button")
-  button.innerText = 'RESTART'
-  button.addEventListener('click', e => {
-    message.remove()
-    runGame()
-  })
-  message.appendChild(button)
+  let message = elt("div", { className: "message" },
+    endGameString,
+    elt("button", {
+        onclick: e => {
+          message.remove()
+          runGame()
+        }
+      },
+      "RESTART"
+    )
+  )
   document.body.appendChild(message)
 }
 
@@ -201,12 +210,18 @@ async function runGame() {
 
   initializeCells()
 
-  while (!state.ended) {
-    state = await turn(state, 'human')
-    if (state.ended) { endGame(state); continue }
+  let cellState
+  while (true) {
+    cellState = await turn(state.cells, 'human')
+    state = calculateGameState(cellState)
+    draw(state.cells)
+    if (state.ended) return endGame(state)
+
     await new Promise(res => setTimeout(res, 400))
-    state = await turn(state, 'ai')
-    if (state.ended) endGame(state)
+    cellState = await turn(state.cells, 'ai')
+    state = calculateGameState(cellState)
+    draw(state.cells)
+    if (state.ended) return endGame(state)
   }
 }
 

@@ -1,3 +1,14 @@
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#app {
+  position: relative;
+  top: 2em;
+}
+
 #game {
   position: relative;
 }
@@ -16,14 +27,14 @@
 
 .symbol {
   position: relative;
-  font-size: 40px;
-  top: 20px;
-  left: 20px;
 }
 
 .message {
-  position: relative;
-  top: 300px;
+  margin-top: 3em;
+  font-size: 1.2em;
+  font-weight: bold;
+  background: lightgray;
+  padding: 0.5em;
 }
 
 button {
